@@ -1,0 +1,17 @@
+Here's your training configuration:
+
+  lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=kristaqp/so101-pick-place \
+    --batch_size=64 \
+    --steps=20000 \
+    --output_dir=outputs/train/so101_smolvla_pick_place \
+    --job_name=so101_pick_place \
+    --policy.device=cuda \
+    --wandb.enable=true
+
+  Training Specs:
+  - GPU: H100 (95GB VRAM - plenty for batch_size=64)
+  - Expected time: ~4 hours for 20k steps
+  - Output: Trained model in outputs/train/so101_smolvla_pick_place/
+  - Tracking: WandB enabled for monitoring

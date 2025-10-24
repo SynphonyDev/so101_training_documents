@@ -1,0 +1,182 @@
+Simplified SO101 SmolVLA Training Guide - UPDATED
+
+  Goal: Reliable overnight training for hackathon demo
+  Hardware: H100 GPU - Training time: ~3-3.5 hours
+
+  CRITICAL UPDATES:
+  - Dataset auto-converts from v2.1 to v3.0 on first run
+  - Using SINGLE camera (wrist.left only) for inference compatibility
+  - Use --save_freq (not --save_checkpoint_interval)
+  - Must add --policy.repo_id and --policy.empty_cameras=2
+
+  Pre-Flight Check
+
+  # 1. Login
+  huggingface-cli login
+
+  # 2. Check your dataset (UPDATED IMPORT PATH)
+  cd /root/so101
+  python3 -c "from lerobot.datasets.lerobot_dataset import LeRobotDataset; ds = LeRobotDataset('kristaqp/so101-pick-place'); print(f'Episodes: {ds.num_episodes}')"
+
+  # 3. Check GPU
+  nvidia-smi
+
+  WORKING TRAINING COMMAND (TESTED & VERIFIED)
+
+  lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=kristaqp/so101-pick-place \
+    --policy.repo_id=kristaqp/smolvla-so101-demo \
+    --batch_size=64 \
+    --steps=20000 \
+    --output_dir=outputs/train/so101_demo \
+    --job_name=so101_hackathon \
+    --policy.device=cuda \
+    --save_freq=5000 \
+    --policy.empty_cameras=2 \
+    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}'
+
+
+  Key changes:
+  - --policy.repo_id added (REQUIRED)
+  - --save_freq=5000 (not save_checkpoint_interval)
+  - --batch_size=64 (tested working)
+  - --policy.empty_cameras=2 (using 1 camera out of 3)
+  - --rename_map maps wrist.left → camera1
+
+  Alternative: With WandB (if you want monitoring)
+
+  # Only if you want to watch progress remotely
+  lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=kristaqp/so101-pick-place \
+    --batch_size=128 \
+    --steps=20000 \
+    --output_dir=outputs/train/so101_demo \
+    --job_name=so101_hackathon \
+    --policy.device=cuda \
+    --save_checkpoint_interval=5000 \
+    --wandb.enable=true
+
+  Run Overnight (Recommended)
+
+  # Run in background with logging
+  nohup lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=kristaqp/so101-pick-place \
+    --batch_size=128 \
+    --steps=20000 \
+    --output_dir=outputs/train/so101_demo \
+    --job_name=so101_hackathon \
+    --policy.device=cuda \
+    --save_checkpoint_interval=5000 \
+    > training.log 2>&1 &
+
+  # Check it's running
+  tail -f training.log
+
+  # Or use tmux (preferred - you can reattach)
+  tmux new -s training
+  lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=kristaqp/so101-pick-place \
+    --policy.repo_id=kristaqp/smolvla-so101-demo \
+    --batch_size=64 \
+    --steps=20000 \
+    --output_dir=outputs/train/so101_demo \
+    --job_name=so101_hackathon \
+    --policy.device=cuda \
+    --save_freq=5000 \
+    --policy.empty_cameras=2 \
+    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}'
+
+  # Detach with: Ctrl+B then D
+  # Reattach with: tmux attach -t training
+
+  Expected Timeline (H100 @ batch_size=64) - VERIFIED
+
+  - Total time: ~3-3.5 hours (0.534s/step measured)
+  - Checkpoint at 5K: ~45 min
+  - Checkpoint at 10K: ~1.5 hrs
+  - Checkpoint at 15K: ~2.25 hrs
+  - Checkpoint at 20K: ~3 hrs (final)
+  - Expected loss: ~0.08 at step 200
+  - Final output: outputs/train/so101_demo/checkpoints/last/pretrained_model/
+
+  Morning After: Test Inference
+
+  # Quick test - load your model
+  python3 -c "
+  from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+  policy = SmolVLAPolicy.from_pretrained('outputs/train/so101_demo/checkpoints/last/pretrained_model')
+  print('✓ Model loaded successfully!')
+  "
+
+  Upload to Hugging Face (for demo)
+
+  huggingface-cli upload kristaqp/smolvla-so101-demo \
+    outputs/train/so101_demo/checkpoints/last/pretrained_model
+
+  Demo Inference Script
+
+  # demo.py - Simple inference for hackathon
+  from lerobot.common.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+  import torch
+
+  # Load your trained model
+  policy = SmolVLAPolicy.from_pretrained(
+      "outputs/train/so101_demo/checkpoints/last/pretrained_model",
+      device="cuda"
+  )
+
+  # Your task
+  task = "Pick up the object and place it in the target location"
+
+  # Dummy observation (replace with real camera + robot state)
+  observation = {
+      "observation.images.camera": torch.randn(3, 224, 224).cuda(),  # Your single camera
+      "observation.state": torch.randn(7).cuda(),  # Robot joint positions
+  }
+
+  # Get action
+  with torch.no_grad():
+      action = policy.select_action(observation, task=task)
+
+  print(f"Predicted action: {action}")
+
+  Troubleshooting Checklist
+
+  If training fails:
+  1. Check dataset: python3 -c "from lerobot.datasets.lerobot_dataset import LeRobotDataset; ds = LeRobotDataset('kristaqp/so101-pick-place'); print(ds.num_episodes)"
+  2. Dataset v2.1 error: Will auto-convert on first run (takes ~3 min)
+  3. Check logs: tail -f training.log
+
+  Common errors:
+  - "BackwardCompatibilityError": Dataset converting, wait for completion
+  - "Feature mismatch": Missing --rename_map or --policy.empty_cameras=2
+  - "'policy.repo_id' missing": Add --policy.repo_id=kristaqp/smolvla-so101-demo
+  - CUDA OOM: batch_size already at 64, check other GPU processes
+
+  Minimal Start Command (Copy-Paste Ready)
+
+  # THIS IS THE ONE - TESTED & WORKING
+  tmux new -s training
+  lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=kristaqp/so101-pick-place \
+    --policy.repo_id=kristaqp/smolvla-so101-demo \
+    --batch_size=64 \
+    --steps=20000 \
+    --output_dir=outputs/train/so101_demo \
+    --job_name=so101_hackathon \
+    --policy.device=cuda \
+    --save_freq=5000 \
+    --policy.empty_cameras=2 \
+    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}'
+
+  Press Ctrl+B then D to detach, close terminal, go to bed.
+
+  Wake up, check progress:
+  tmux attach -t training
+  # Or check directly:
+  ls -lh outputs/train/so101_demo/checkpoints/

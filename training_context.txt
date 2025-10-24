@@ -1,0 +1,72 @@
+Help me research into the lerobot hugging face so101. Especially with training. I have a data set on Hugging Face. And I want to train smolVLA. I'll help you research LeRobot and training SmolVLA with the SO-101 robot. Let me search for the latest information on these topics.LeRobot Hugging Face SO-101 robot training10 resultsGitHub - huggingface/lerobot: 🤗 LeRobot: Making AI for Robotics more accessible with end-to-end learninggithub.comSO-101huggingface.colerobot (LeRobot)huggingface.coPost-Training Isaac GR00T N1.5 for LeRobot SO-101 Armhuggingface.coHugging Face SO-101 is a 3D-Printable Robotic Arm That Costs Just $100 to Make - TechEBlogtecheblog.comLeRobot (@LeRobotHF) / Xx.comHugging Face releases a 3D-printed robotic arm starting at $100 | TechCrunchtechcrunch.comLeRobot SO(101) - AI Robotics Starter Kitautodiscovery.euLeRobot: An End-to-End Robot Learning Library - Hugging Face Robotics Coursehuggingface.coGetting Started with Real-World Robotshuggingface.coNow let me search specifically for SmolVLA and how to train it with LeRobot datasets:SmolVLA training LeRobot Hugging Face dataset10 resultsSmolVLAhuggingface.colerobot/smolvla_base · Hugging Facehuggingface.coSmolVLA: Efficient Vision-Language-Action Model trained on Lerobot Community Datahuggingface.coSmolVLA: An Open-Source Vision-Language-Action Model for Modern Roboticssmolvla.netSmolVLA: Efficient Vision Language Action Model - LeRobotlearnopencv.comTrain SmolVLAphospho.aiHugging Face says its new robotics model is so efficient it can run on a MacBook | TechCrunchtechcrunch.comLow Success Rate When Training SmolVLA-0.24B on LIBERO · Issue #2107 · huggingface/lerobotgithub.comDecoding SmolVLA: A Vision-Language-Action Model for Efficient and Accessible Roboticsphospho.aiHuggingFaceVLA/smolvla_libero · Hugging Facehuggingface.coLet me get more specific information about dataset requirements and format:Fetched SmolVLAhuggingface.coNow let me search for more information about LeRobot dataset format requirements:Fetched Getting Started with Real-World Robotshuggingface.coGreat! Now I have comprehensive information. Let me compile this research for you:
+Research Summary: LeRobot SO-101 & Training SmolVLA
+Based on my research, here's what you need to know about training SmolVLA with your Hugging Face dataset:
+LeRobot SO-101 Overview
+
+The SO-101 is Hugging Face's 3D-printable robotic arm that costs around $100-500 depending on assembly and supplier, featuring improved motors that reduce friction and allow the arm to sustain its own weight TechEBlogTechCrunch
+It's designed specifically for data collection through teleoperation, with a leader arm controlling the follower arm to create high-quality datasets Autodiscovery
+Works with LeRobot's dataset format which automatically downloads from Hugging Face Hub GitHub
+
+SmolVLA Key Details
+
+SmolVLA is a compact 450M parameter Vision-Language-Action model trained exclusively on LeRobot Community Datasets from Hugging Face Hub Hugging Face
+Small enough to run on a single consumer GPU or even a MacBook, making it highly accessible TechCrunch
+Pretrained on community datasets, SmolVLA achieved a 26.6% absolute improvement over non-pretrained versions Hugging Face
+
+Training SmolVLA with Your Dataset
+Prerequisites:
+bash# Install LeRobot
+pip install -e ".[smolvla]"
+
+# Login to Hugging Face
+huggingface-cli login --token ${HUGGINGFACE_TOKEN}
+Dataset Requirements:
+You should record approximately 50 episodes as a starting point, with enough demonstrations per variation (e.g., if doing pick-place, record 10 episodes per cube position across 5 positions) Hugging Face
+Training Command:
+bashcd lerobot && lerobot-train \
+  --policy.path=lerobot/smolvla_base \
+  --dataset.repo_id=${HF_USER}/your-dataset \
+  --batch_size=64 \
+  --steps=20000 \
+  --output_dir=outputs/train/my_smolvla \
+  --job_name=my_smolvla_training \
+  --policy.device=cuda \
+  --wandb.enable=true
+Training Details:
+
+Training for 20k steps takes roughly 4 hours on a single A100 GPU Hugging Face
+Start with a small batch size and increase incrementally if GPU allows Hugging FaceHugging Face
+You can adjust steps based on your use case and performance
+
+Dataset Format & Recording
+Your dataset should be in LeRobotDataset format. If you need to record one:
+bashpython -m lerobot.record \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=my_follower_arm \
+  --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}}" \
+  --teleop.type=so101_leader \
+  --teleop.port=/dev/ttyACM1 \
+  --teleop.id=my_leader_arm \
+  --dataset.repo_id=${HF_USER}/your-dataset \
+  --dataset.num_episodes=50 \
+  --dataset.single_task="Your task description"
+After Training
+Upload your model:
+bashhuggingface-cli upload ${HF_USER}/my_smolvla_model \
+  outputs/train/my_smolvla/checkpoints/last/pretrained_model
+Run inference:
+bashlerobot-record \
+  --robot.type=so101_follower \
+  --robot.port=/dev/ttyACM0 \
+  --robot.id=my_follower_arm \
+  --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30}}" \
+  --dataset.single_task="Your task description" \
+  --policy.path=${HF_USER}/my_smolvla_model
+Important Notes
+
+Data Quality is Key: A dataset with 25 episodes was insufficient and led to bad performance, while 50 episodes with proper variation structure (10 per position across 5 positions) worked well Hugging Face
+Your dataset needs to be tagged as LeRobot format on Hugging Face for compatibility
+If you have compute constraints, Synphony's neural world models could potentially help generate synthetic variations of your training data to augment your dataset!
+
+Would you like me to help with any specific aspect of this, such as setting up your dataset format, optimizing training parameters for your compute setup, or exploring how Synphony's technology could augment your training data?

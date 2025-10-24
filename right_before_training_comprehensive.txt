@@ -1,0 +1,154 @@
+Based on the research, here are H100-optimized training parameters and inference scripts
+  used in production:
+
+  Training Parameters for H100 (50 Episodes)
+
+  Recommended Configuration
+
+  cd lerobot && lerobot-train \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=${HF_USER}/your-dataset-name \
+    --batch_size=128 \
+    --steps=20000 \
+    --output_dir=outputs/train/smolvla_so101 \
+    --job_name=so101_smolvla_h100 \
+    --policy.device=cuda \
+    --wandb.enable=true \
+    --wandb.project=smolvla-so101-training
+
+  H100-Specific Optimizations
+
+  Batch Size Options:
+  - Conservative: --batch_size=64 (standard A100 config, ~4hr training)
+  - Recommended: --batch_size=128 (leverage H100's 80GB memory)
+  - Aggressive: --batch_size=256 (if data loading is fast, monitor GPU util)
+
+  Why larger batch size on H100:
+  - H100 update step: 0.3 seconds (very fast)
+  - A100 update step: ~0.5-0.7 seconds
+  - H100 has 80GB memory vs A100's 40GB
+  - With 50 episodes, batch_size=128-256 should fit comfortably
+
+  Training Time Estimates
+
+  - A100: ~4 hours @ batch_size=64
+  - H100: ~2-2.5 hours @ batch_size=128 (expected)
+  - H100: ~1.5-2 hours @ batch_size=256 (if data loading optimized)
+
+  Complete Training Script
+
+  #!/bin/bash
+
+  # Set your Hugging Face username
+  export HF_USER="your-username"
+  export DATASET_NAME="your-dataset-name"
+
+  # Install dependencies (one-time)
+  pip install -e ".[smolvla]"
+
+  # Login to Hugging Face (one-time)
+  huggingface-cli login --token ${HUGGINGFACE_TOKEN}
+
+  # Run training
+  cd lerobot && python lerobot/scripts/train.py \
+    --policy.path=lerobot/smolvla_base \
+    --dataset.repo_id=${HF_USER}/${DATASET_NAME} \
+    --batch_size=128 \
+    --steps=20000 \
+    --output_dir=outputs/train/smolvla_so101_$(date +%Y%m%d_%H%M%S) \
+    --job_name=so101_smolvla_h100 \
+    --policy.device=cuda \
+    --wandb.enable=true \
+    --wandb.project=smolvla-so101-training
+
+  # Upload model to Hugging Face
+  huggingface-cli upload ${HF_USER}/smolvla_so101_finetuned \
+    outputs/train/smolvla_so101_*/checkpoints/last/pretrained_model
+
+  Inference Script (Real SO101 Robot)
+
+  Standard Inference
+
+  lerobot-record \
+    --robot.type=so101_follower \
+    --robot.port=/dev/ttyACM0 \
+    --robot.id=my_follower_arm \
+    --robot.cameras="{ 
+      top: {type: opencv, index_or_path: 0, width: 640, height: 480, fps: 30},
+      side: {type: opencv, index_or_path: 1, width: 640, height: 480, fps: 30}
+    }" \
+    --dataset.single_task="Pick up the lego block and place it in the bin." \
+    --dataset.repo_id=${HF_USER}/eval_so101_test \
+    --dataset.episode_time_s=50 \
+    --dataset.num_episodes=10 \
+    --policy.path=${HF_USER}/smolvla_so101_finetuned
+
+  Python Inference Script
+
+  from lerobot.common.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+  from lerobot.common.datasets.lerobot_dataset import LeRobotDataset
+  import torch
+
+  # Load your finetuned model
+  policy = SmolVLAPolicy.from_pretrained(
+      "${HF_USER}/smolvla_so101_finetuned",
+      device="cuda"
+  )
+
+  # Inference loop (pseudo-code)
+  task_description = "Pick up the lego block and place it in the bin."
+
+  # Get observation from robot (image + proprioception)
+  observation = {
+      "observation.images.top": top_camera_image,  # torch.Tensor [C, H, W]
+      "observation.images.side": side_camera_image,
+      "observation.state": robot_joint_positions,  # torch.Tensor [state_dim]
+  }
+
+  # Predict action
+  with torch.no_grad():
+      action = policy.select_action(
+          observation=observation,
+          task=task_description
+      )
+
+  # Send action to robot
+  robot.execute_action(action)
+
+  Camera Setup for SO101
+
+  Based on https://github.com/huggingface/lerobot/issues/1763:
+  - Recommended: Top + Side cameras (what SO101 dataset uses)
+  - Resolution: 640x480 @ 30fps
+  - Format: OpenCV capture
+
+  Monitoring Training
+
+  # Watch GPU utilization
+  watch -n 1 nvidia-smi
+
+  # Monitor with wandb
+  # View at: https://wandb.ai/your-username/smolvla-so101-training
+
+  Advanced: Training from Scratch (Optional)
+
+  If you want to train without pretrained weights (200k steps):
+  python lerobot/scripts/train.py \
+    --dataset.repo_id=${HF_USER}/${DATASET_NAME} \
+    --batch_size=128 \
+    --steps=200000 \
+    --output_dir=outputs/train/smolvla_scratch \
+    --policy.device=cuda \
+    --wandb.enable=true
+
+  Warning: 200k steps = ~40 hours on H100 @ batch_size=128. Only do this if you have specific
+  requirements.
+
+  Key Recommendations for Your Setup
+
+  1. Start with batch_size=128 on H100 with 50 episodes
+  2. Monitor GPU memory: nvidia-smi should show ~60-70% utilization
+  3. If memory allows: Try batch_size=192 or 256
+  4. Watch data loading time: Should be < 1 second per batch
+  5. Expected training time: ~2-2.5 hours for 20k steps
+

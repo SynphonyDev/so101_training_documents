@@ -1,0 +1,4 @@
+  - LeRobot: v0.4.1 (installed in /root/so101/lerobot)
+  - PyTorch: v2.7.1 with CUDA 12.6 support
+  - CUDA: Available and working (NVIDIA H100 GPU detected)
+  - Hugging Face: Already authenticated as synjoe (org: synphony)
