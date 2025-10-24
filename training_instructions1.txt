@@ -23,6 +23,9 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
 
   WORKING TRAINING COMMAND (TESTED & VERIFIED)
 
+  # Suppress tokenizers warnings
+  export TOKENIZERS_PARALLELISM=false
+
   lerobot-train \
     --policy.path=lerobot/smolvla_base \
     --dataset.repo_id=kristaqp/so101-pick-place \
@@ -34,7 +37,8 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
     --policy.device=cuda \
     --save_freq=5000 \
     --policy.empty_cameras=2 \
-    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}'
+    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}' \
+    2>&1 | tee training.log
 
 
   Key changes:
@@ -43,6 +47,8 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
   - --batch_size=64 (tested working)
   - --policy.empty_cameras=2 (using 1 camera out of 3)
   - --rename_map maps wrist.left → camera1
+  - export TOKENIZERS_PARALLELISM=false (suppresses fork warnings)
+  - 2>&1 | tee training.log (saves output to file AND displays in terminal)
 
   Alternative: With WandB (if you want monitoring)
 
@@ -60,23 +66,9 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
 
   Run Overnight (Recommended)
 
-  # Run in background with logging
-  nohup lerobot-train \
-    --policy.path=lerobot/smolvla_base \
-    --dataset.repo_id=kristaqp/so101-pick-place \
-    --batch_size=128 \
-    --steps=20000 \
-    --output_dir=outputs/train/so101_demo \
-    --job_name=so101_hackathon \
-    --policy.device=cuda \
-    --save_checkpoint_interval=5000 \
-    > training.log 2>&1 &
-
-  # Check it's running
-  tail -f training.log
-
-  # Or use tmux (preferred - you can reattach)
+  # use tmux (preferred - you can reattach)
   tmux new -s training
+  export TOKENIZERS_PARALLELISM=false
   lerobot-train \
     --policy.path=lerobot/smolvla_base \
     --dataset.repo_id=kristaqp/so101-pick-place \
@@ -88,7 +80,8 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
     --policy.device=cuda \
     --save_freq=5000 \
     --policy.empty_cameras=2 \
-    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}'
+    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}' \
+    2>&1 | tee training.log
 
   # Detach with: Ctrl+B then D
   # Reattach with: tmux attach -t training
@@ -156,27 +149,3 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
   - "Feature mismatch": Missing --rename_map or --policy.empty_cameras=2
   - "'policy.repo_id' missing": Add --policy.repo_id=kristaqp/smolvla-so101-demo
   - CUDA OOM: batch_size already at 64, check other GPU processes
-
-  Minimal Start Command (Copy-Paste Ready)
-
-  # THIS IS THE ONE - TESTED & WORKING
-  tmux new -s training
-  lerobot-train \
-    --policy.path=lerobot/smolvla_base \
-    --dataset.repo_id=kristaqp/so101-pick-place \
-    --policy.repo_id=kristaqp/smolvla-so101-demo \
-    --batch_size=64 \
-    --steps=20000 \
-    --output_dir=outputs/train/so101_demo \
-    --job_name=so101_hackathon \
-    --policy.device=cuda \
-    --save_freq=5000 \
-    --policy.empty_cameras=2 \
-    --rename_map='{"observation.images.wrist.left": "observation.images.camera1"}'
-
-  Press Ctrl+B then D to detach, close terminal, go to bed.
-
-  Wake up, check progress:
-  tmux attach -t training
-  # Or check directly:
-  ls -lh outputs/train/so101_demo/checkpoints/
