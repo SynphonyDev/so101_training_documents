@@ -64,17 +64,6 @@ system_profiler SPCameraDataType
 #     Model ID: UVC Camera VendorID_1443 ProductID_37424
 #     Unique ID: 0x13000005a39230
 
-# Test camera access
-python << 'EOF'
-import cv2
-cap = cv2.VideoCapture(0)  # Try index 0, 1, 2, etc.
-ret, frame = cap.read()
-if ret:
-    print(f"✓ Camera working: {frame.shape}")
-else:
-    print("✗ Camera not accessible")
-cap.release()
-EOF
 
 ========================================
 STEP 4: Run Inference on Robot
@@ -84,11 +73,11 @@ BASIC INFERENCE COMMAND (COPY AND PASTE THIS):
 
 lerobot-record \
   --robot.type=so101_follower \
-  --robot.port=/dev/tty.usbmodem14201 \
+  --robot.port=/dev/tty.usbmodem5A7A0549711 \
   --robot.id=so101_follower \
   --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
   --dataset.repo_id=synphony/eval_so101_demo \
-  --dataset.single_task="Pick up the object and place it in the target location" \
+  --dataset.single_task="Pick the red object and place it in the box" \
   --policy.path=./smolvla-model/pretrained_model \
   --display_data=true
 
