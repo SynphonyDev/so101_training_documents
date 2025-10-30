@@ -1,0 +1,230 @@
+SO-101 Mac Inference Setup Guide
+================================
+Date: October 30, 2025
+Model: synphony/smolvla-so101-demo (your fine-tuned model)
+Hardware: M1 MacBook Air (8GB RAM)
+
+VERIFIED: SmolVLA is efficient enough to run on a MacBook!
+
+========================================
+STEP 1: Install LeRobot on Mac
+========================================
+
+IMPORTANT: Use conda environment to avoid dependency conflicts!
+
+# Create dedicated conda environment
+conda create -n lerobot python=3.11 -y
+conda activate lerobot
+
+# Install from latest github
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+pip3 install -e ".[smolvla]"
+
+========================================
+STEP 2: Download and Test Model Loading (No Robot)
+========================================
+
+# Download model files from HuggingFace to local directory
+huggingface-cli download synphony/smolvla-so101-demo \
+  --include "pretrained_model/*" \
+  --local-dir ./smolvla-model
+
+# Test that your fine-tuned model loads successfully on Mac
+python << 'EOF'
+from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+
+print("Loading model from local path...")
+policy = SmolVLAPolicy.from_pretrained(
+    "./smolvla-model/pretrained_model",
+    device="cpu"
+)
+print("✓ Model loaded successfully from local path!")
+print(f"Model parameters: {sum(p.numel() for p in policy.parameters()) / 1e6:.1f}M")
+EOF
+
+========================================
+STEP 3: Connect SO-101 Robot
+========================================
+
+HARDWARE SETUP:
+1. Connect SO-101 follower arm to Mac via USB
+2. Connect camera(s) to Mac via USB
+3. Check device connections:
+
+# Find robot port
+ls /dev/tty.* | grep -i usb
+
+# SO_101_old: /dev/tty.usbmodem5A7A0549711
+
+# Find camera
+system_profiler SPCameraDataType
+
+# USB2.0_CAM1:
+#     Model ID: UVC Camera VendorID_1443 ProductID_37424
+#     Unique ID: 0x13000005a39230
+
+# Test camera access
+python << 'EOF'
+import cv2
+cap = cv2.VideoCapture(0)  # Try index 0, 1, 2, etc.
+ret, frame = cap.read()
+if ret:
+    print(f"✓ Camera working: {frame.shape}")
+else:
+    print("✗ Camera not accessible")
+cap.release()
+EOF
+
+========================================
+STEP 4: Run Inference on Robot
+========================================
+
+BASIC INFERENCE COMMAND (COPY AND PASTE THIS):
+
+lerobot-record \
+  --robot.type=so101_follower \
+  --robot.port=/dev/tty.usbmodem14201 \
+  --robot.id=so101_follower \
+  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
+  --dataset.repo_id=synphony/eval_so101_demo \
+  --dataset.single_task="Pick up the object and place it in the target location" \
+  --policy.path=./smolvla-model/pretrained_model \
+  --display_data=true
+
+IMPORTANT NOTES:
+- Model uses local path (must download first in Step 2)
+- Replace /dev/tty.usbmodem14201 with YOUR actual robot port
+- Replace camera index_or_path: 0 with your actual camera (try 0, 1, 2)
+- Camera name should match training: "camera1" (mapped from wrist.left)
+- Task description should match your training task
+
+========================================
+STEP 5: Configuration Matching Training
+========================================
+
+YOUR TRAINING CONFIGURATION:
+- Single camera: wrist.left → camera1
+- Empty cameras: 2 (using 1 out of 3 cameras)
+- Task: "Pick up the object and place it in the target location"
+
+INFERENCE MUST MATCH:
+- Use same camera name: "camera1"
+- Use same task description
+- Same image dimensions if specified in training
+
+Example Python inference script:
+
+# inference_demo.py
+from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+import torch
+import cv2
+
+# Load your trained model from local path (must download first)
+policy = SmolVLAPolicy.from_pretrained(
+    "./smolvla-model/pretrained_model",
+    device="cpu"
+)
+
+# Your task (MUST match training)
+task = "Pick up the object and place it in the target location"
+
+# Capture camera frame
+cap = cv2.VideoCapture(0)
+ret, frame = cap.read()
+
+# Prepare observation
+observation = {
+    "observation.images.camera1": torch.from_numpy(frame).permute(2, 0, 1).float(),
+    "observation.state": torch.randn(7),  # Replace with actual robot state
+}
+
+# Get action prediction
+with torch.no_grad():
+    action = policy.select_action(observation, task=task)
+
+print(f"Predicted action: {action}")
+cap.release()
+
+========================================
+TROUBLESHOOTING
+========================================
+
+ISSUE: "No module named 'lerobot'"
+FIX: Run pip3 install lerobot
+
+ISSUE: "Cannot open camera"
+FIX:
+- Check camera permissions: System Settings > Privacy & Security > Camera
+- Try different camera indices: 0, 1, 2
+- Check: system_profiler SPCameraDataType
+
+ISSUE: "Cannot open /dev/tty.usbmodem*"
+FIX:
+- Check USB connection
+- Install serial drivers if needed
+- Check permissions: ls -l /dev/tty.usbmodem*
+
+ISSUE: Model loading is slow
+FIX: Expected on first load - model downloads from HuggingFace
+      Subsequent loads will be faster (cached locally)
+
+ISSUE: Inference is slow on Mac
+FIX:
+- SmolVLA is optimized for efficiency but may be slower on CPU
+- Expected: ~1-5 seconds per action on M1 Mac
+- Consider using smaller batch sizes if memory is an issue
+
+ISSUE: "Feature mismatch" or "shape mismatch"
+FIX: Ensure camera configuration matches training:
+- Camera name: "camera1" (not "wrist.left", not "front")
+- Image dimensions match training if specified
+- State dimensions match robot (7-dim for SO-101)
+
+ISSUE: "config.json not found" or 404 error or "Repo id must be in the form..."
+FIX: The HuggingFace repo has model files in a subdirectory. Download locally first:
+- Download: huggingface-cli download synphony/smolvla-so101-demo --include "pretrained_model/*" --local-dir ./smolvla-model
+- Load: SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model", device="cpu")
+- The subfolder parameter doesn't work properly with lerobot's from_pretrained method
+
+========================================
+NEXT STEPS
+========================================
+
+1. Install lerobot: See Step 1 (use conda environment)
+2. Download model from HuggingFace: See Step 2
+3. Test model loading without robot (Step 2)
+4. Connect robot and identify ports (Step 3)
+5. Run basic inference (Step 4)
+6. Adjust camera/robot configuration as needed
+7. Record evaluation episodes
+
+EVALUATION DATASET:
+When you run inference, it will create an evaluation dataset:
+- Dataset name: synphony/eval_so101_demo
+- Contains robot trajectories from your policy
+- Can be uploaded to HuggingFace for analysis
+
+========================================
+PERFORMANCE EXPECTATIONS
+========================================
+
+Model Size: ~450M parameters (865MB model file)
+Mac Inference Speed: ~1-5 seconds per action (CPU-based)
+Memory Usage: ~2-3GB RAM during inference
+First Load Time: ~1-2 minutes (downloads from HuggingFace)
+Subsequent Loads: ~10-20 seconds (loads from cache)
+
+Your M1 Mac should handle this comfortably!
+
+========================================
+ADDITIONAL RESOURCES
+========================================
+
+- LeRobot Docs: https://huggingface.co/docs/lerobot
+- SO-101 Guide: https://huggingface.co/SO-101
+- SmolVLA Model: https://huggingface.co/synphony/smolvla-so101-demo
+- Training Results: See training_results_oct24_2025.txt
+
+If you encounter issues not covered here, check the LeRobot GitHub issues:
+https://github.com/huggingface/lerobot/issues
