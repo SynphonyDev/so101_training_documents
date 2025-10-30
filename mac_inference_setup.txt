@@ -24,6 +24,9 @@ pip install -e ".[smolvla]"
 # Install additional dependencies for SmolVLA
 pip install num2words
 
+# CRITICAL: Install Feetech SDK for SO-101 robot motors
+pip install -e ".[feetech]"
+
 ========================================
 STEP 2: Download and Test Model Loading (No Robot)
 ========================================
@@ -108,18 +111,24 @@ lerobot-record \
   --robot.type=so101_follower \
   --robot.port=/dev/tty.usbmodem5A7A0549711 \
   --robot.id=so101_follower \
-  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
+  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 1280, "height": 720, "fps": 30}}' \
   --dataset.repo_id=synphony/eval_so101_demo \
   --dataset.single_task="Pick the red object and place it in the box" \
-  --policy.path=./smolvla-model/pretrained_model \
+  --policy.path=synphony/smolvla-so101-demo \
   --display_data=true
 
 IMPORTANT NOTES:
 - Robot port: /dev/tty.usbmodem5A7A0549711 (YOUR specific SO-101)
 - Camera: index 0 = USB2.0_CAM1 (verified in Step 3)
+- Camera resolution: 1280×720 (MUST match training data aspect ratio)
+  * Training data used: 1280×720 (16:9 aspect ratio)
+  * Camera captures at: 1920×1080 native, but OpenCV config downsamples to 1280×720
+  * LeRobot automatically resizes to 512×512, then model processes to 256×256
+  * Using 1280×720 preserves the 16:9 aspect ratio from training
 - Camera name: "camera1" (MUST match training - mapped from wrist.left)
 - Task description: MUST match training task exactly
-- Model uses local path (must download first in Step 2)
+- Model path: synphony/smolvla-so101-demo (HuggingFace repo - will cache locally)
+  * Model files now at repo root (moved from pretrained_model/ subdirectory)
 
 ========================================
 STEP 5: Configuration Matching Training
@@ -127,13 +136,17 @@ STEP 5: Configuration Matching Training
 
 YOUR TRAINING CONFIGURATION:
 - Single camera: wrist.left → camera1
+- Camera resolution: 1280×720 (16:9 aspect ratio)
 - Empty cameras: 2 (using 1 out of 3 cameras)
 - Task: "Pick the red object and place it in the box"
 
 INFERENCE MUST MATCH:
 - Use same camera name: "camera1"
 - Use same task description
-- Same image dimensions if specified in training
+- Use same aspect ratio: 1280×720 (16:9) - critical for model performance!
+  * Model expects: 256×256 (after automatic resizing from 512×512)
+  * LeRobot automatically handles resizing with padding
+  * BUT aspect ratio should match training to preserve visual features
 
 Example Python inference script:
 
@@ -176,6 +189,12 @@ FIX: Install in conda environment (see Step 1)
 ISSUE: "Package `num2words` is required"
 FIX: pip install num2words
 
+ISSUE: "ModuleNotFoundError: No module named 'scservo_sdk'"
+FIX: SO-101 uses Feetech motors which require Feetech SDK
+- Run: cd lerobot && pip install -e ".[feetech]"
+- This installs feetech-servo-sdk package
+- Must be done from lerobot directory (editable install)
+
 ISSUE: "Cannot open camera"
 FIX:
 - Check camera permissions: System Settings > Privacy & Security > Camera
@@ -206,11 +225,21 @@ FIX: Ensure camera configuration matches training:
 - Image dimensions match training if specified
 - State dimensions match robot (7-dim for SO-101)
 
+ISSUE: Poor model performance or unexpected actions
+FIX: Check camera resolution and aspect ratio:
+- Training used: 1280×720 (16:9 aspect ratio)
+- Your inference should use: 1280×720 (same aspect ratio)
+- Different aspect ratios (e.g., 640×480 = 4:3) cause different padding
+- This changes visual features and degrades performance
+- LeRobot resizes automatically, but aspect ratio should match training
+
 ISSUE: "config.json not found" or 404 error or "Repo id must be in the form..."
-FIX: The HuggingFace repo has model files in a subdirectory. Download locally first:
-- Download: huggingface-cli download synphony/smolvla-so101-demo --include "pretrained_model/*" --local-dir ./smolvla-model
-- Load: SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
-- The subfolder parameter doesn't work properly with lerobot's from_pretrained method
+FIX: Model files must be at repo root, not in subdirectory
+- FIXED: Model files moved from pretrained_model/ to repo root
+- Now use: --policy.path=synphony/smolvla-so101-demo
+- LeRobot downloads and caches automatically from HuggingFace
+- If you uploaded to a subdirectory, move files to root:
+  cd /path/to/local/model && hf upload your-repo/model-name . .
 
 ========================================
 NEXT STEPS
