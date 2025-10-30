@@ -70,18 +70,32 @@ system_profiler SPCameraDataType
 # Test camera indices to find which one is USB2.0_CAM1
 python << 'EOF'
 import cv2
-print("Testing camera indices...")
+import os
+
+print("Testing camera indices and taking snapshots...")
+print("=" * 50)
+
+os.makedirs("./tmp", exist_ok=True)
+
 for i in range(5):
     cap = cv2.VideoCapture(i)
     ret, frame = cap.read()
     if ret:
-        print(f"Camera {i}: Working - Resolution: {frame.shape[1]}x{frame.shape[0]}")
+        resolution = f"{frame.shape[1]}x{frame.shape[0]}"
+        filename = f"./tmp/camera_{i}_{resolution}.jpg"
+        cv2.imwrite(filename, frame)
+        print(f"✓ Camera {i}: Working - Resolution: {resolution}")
+        print(f"  Snapshot saved: {filename}")
     else:
-        print(f"Camera {i}: Not accessible")
+        print(f"✗ Camera {i}: Not accessible")
     cap.release()
+
+print("=" * 50)
+print("\nOpen the snapshot files to identify your USB2.0_CAM1:")
+print("  open ./tmp/camera_*.jpg")
 EOF
 
-# Based on tests: Camera 2 (1280x720) = USB2.0_CAM1
+# Based on tests: Camera 0 (1920x1080) = USB2.0_CAM1
 
 
 ========================================
@@ -94,7 +108,7 @@ lerobot-record \
   --robot.type=so101_follower \
   --robot.port=/dev/tty.usbmodem5A7A0549711 \
   --robot.id=so101_follower \
-  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 2, "width": 640, "height": 480, "fps": 30}}' \
+  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
   --dataset.repo_id=synphony/eval_so101_demo \
   --dataset.single_task="Pick the red object and place it in the box" \
   --policy.path=./smolvla-model/pretrained_model \
@@ -102,7 +116,7 @@ lerobot-record \
 
 IMPORTANT NOTES:
 - Robot port: /dev/tty.usbmodem5A7A0549711 (YOUR specific SO-101)
-- Camera: index 2 = USB2.0_CAM1 (verified in Step 3)
+- Camera: index 0 = USB2.0_CAM1 (verified in Step 3)
 - Camera name: "camera1" (MUST match training - mapped from wrist.left)
 - Task description: MUST match training task exactly
 - Model uses local path (must download first in Step 2)
@@ -135,7 +149,7 @@ policy = SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
 # Your task (MUST match training)
 task = "Pick the red object and place it in the box"
 
-# Capture camera frame
+# Capture camera frame (use camera 0 = USB2.0_CAM1)
 cap = cv2.VideoCapture(0)
 ret, frame = cap.read()
 
@@ -166,9 +180,9 @@ ISSUE: "Cannot open camera"
 FIX:
 - Check camera permissions: System Settings > Privacy & Security > Camera
 - Verify camera index with test script in Step 3
-- Your setup: Camera 2 = USB2.0_CAM1
-- If camera 2 doesn't work, try 0 or capture test image:
-  python -c "import cv2; cap = cv2.VideoCapture(2); ret, frame = cap.read(); cv2.imwrite('/tmp/test.jpg', frame); cap.release(); print('Saved to /tmp/test.jpg')"
+- Your setup: Camera 0 = USB2.0_CAM1
+- If camera 0 doesn't work, try other indices or capture test image:
+  python -c "import cv2; cap = cv2.VideoCapture(0); ret, frame = cap.read(); cv2.imwrite('./tmp/test.jpg', frame); cap.release(); print('Saved to ./tmp/test.jpg')"
 
 ISSUE: "Cannot open /dev/tty.usbmodem*"
 FIX:
@@ -195,7 +209,7 @@ FIX: Ensure camera configuration matches training:
 ISSUE: "config.json not found" or 404 error or "Repo id must be in the form..."
 FIX: The HuggingFace repo has model files in a subdirectory. Download locally first:
 - Download: huggingface-cli download synphony/smolvla-so101-demo --include "pretrained_model/*" --local-dir ./smolvla-model
-- Load: SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model", device="cpu")
+- Load: SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
 - The subfolder parameter doesn't work properly with lerobot's from_pretrained method
 
 ========================================
@@ -220,13 +234,14 @@ When you run inference, it will create an evaluation dataset:
 PERFORMANCE EXPECTATIONS
 ========================================
 
-Model Size: ~450M parameters (865MB model file)
-Mac Inference Speed: ~1-5 seconds per action (CPU-based)
+Model Size: 450M parameters (907MB model file)
+Device: Automatically uses MPS (Metal GPU) on M1 Mac - better than CPU!
+Mac Inference Speed: ~0.5-2 seconds per action (MPS GPU-accelerated)
 Memory Usage: ~2-3GB RAM during inference
-First Load Time: ~1-2 minutes (downloads from HuggingFace)
-Subsequent Loads: ~10-20 seconds (loads from cache)
+First Load Time: ~20-30 seconds (from local path)
+Model Download Time: ~1-2 minutes (one-time download, 907MB file)
 
-Your M1 Mac should handle this comfortably!
+Your M1 Mac handles this comfortably with GPU acceleration!
 
 ========================================
 ADDITIONAL RESOURCES
