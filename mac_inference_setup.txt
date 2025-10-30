@@ -19,7 +19,10 @@ conda activate lerobot
 # Install from latest github
 git clone https://github.com/huggingface/lerobot.git
 cd lerobot
-pip3 install -e ".[smolvla]"
+pip install -e ".[smolvla]"
+
+# Install additional dependencies for SmolVLA
+pip install num2words
 
 ========================================
 STEP 2: Download and Test Model Loading (No Robot)
@@ -35,13 +38,13 @@ python << 'EOF'
 from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
 
 print("Loading model from local path...")
-policy = SmolVLAPolicy.from_pretrained(
-    "./smolvla-model/pretrained_model",
-    device="cpu"
-)
+policy = SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
 print("✓ Model loaded successfully from local path!")
 print(f"Model parameters: {sum(p.numel() for p in policy.parameters()) / 1e6:.1f}M")
+print(f"Device: {next(policy.parameters()).device}")
 EOF
+
+# Note: Model will automatically use Apple's MPS (Metal) GPU on M1 Mac!
 
 ========================================
 STEP 3: Connect SO-101 Robot
@@ -64,6 +67,22 @@ system_profiler SPCameraDataType
 #     Model ID: UVC Camera VendorID_1443 ProductID_37424
 #     Unique ID: 0x13000005a39230
 
+# Test camera indices to find which one is USB2.0_CAM1
+python << 'EOF'
+import cv2
+print("Testing camera indices...")
+for i in range(5):
+    cap = cv2.VideoCapture(i)
+    ret, frame = cap.read()
+    if ret:
+        print(f"Camera {i}: Working - Resolution: {frame.shape[1]}x{frame.shape[0]}")
+    else:
+        print(f"Camera {i}: Not accessible")
+    cap.release()
+EOF
+
+# Based on tests: Camera 2 (1280x720) = USB2.0_CAM1
+
 
 ========================================
 STEP 4: Run Inference on Robot
@@ -75,18 +94,18 @@ lerobot-record \
   --robot.type=so101_follower \
   --robot.port=/dev/tty.usbmodem5A7A0549711 \
   --robot.id=so101_follower \
-  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
+  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 2, "width": 640, "height": 480, "fps": 30}}' \
   --dataset.repo_id=synphony/eval_so101_demo \
   --dataset.single_task="Pick the red object and place it in the box" \
   --policy.path=./smolvla-model/pretrained_model \
   --display_data=true
 
 IMPORTANT NOTES:
+- Robot port: /dev/tty.usbmodem5A7A0549711 (YOUR specific SO-101)
+- Camera: index 2 = USB2.0_CAM1 (verified in Step 3)
+- Camera name: "camera1" (MUST match training - mapped from wrist.left)
+- Task description: MUST match training task exactly
 - Model uses local path (must download first in Step 2)
-- Replace /dev/tty.usbmodem14201 with YOUR actual robot port
-- Replace camera index_or_path: 0 with your actual camera (try 0, 1, 2)
-- Camera name should match training: "camera1" (mapped from wrist.left)
-- Task description should match your training task
 
 ========================================
 STEP 5: Configuration Matching Training
@@ -95,7 +114,7 @@ STEP 5: Configuration Matching Training
 YOUR TRAINING CONFIGURATION:
 - Single camera: wrist.left → camera1
 - Empty cameras: 2 (using 1 out of 3 cameras)
-- Task: "Pick up the object and place it in the target location"
+- Task: "Pick the red object and place it in the box"
 
 INFERENCE MUST MATCH:
 - Use same camera name: "camera1"
@@ -110,13 +129,11 @@ import torch
 import cv2
 
 # Load your trained model from local path (must download first)
-policy = SmolVLAPolicy.from_pretrained(
-    "./smolvla-model/pretrained_model",
-    device="cpu"
-)
+# Device is automatically selected (will use MPS GPU on M1 Mac)
+policy = SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
 
 # Your task (MUST match training)
-task = "Pick up the object and place it in the target location"
+task = "Pick the red object and place it in the box"
 
 # Capture camera frame
 cap = cv2.VideoCapture(0)
@@ -140,13 +157,18 @@ TROUBLESHOOTING
 ========================================
 
 ISSUE: "No module named 'lerobot'"
-FIX: Run pip3 install lerobot
+FIX: Install in conda environment (see Step 1)
+
+ISSUE: "Package `num2words` is required"
+FIX: pip install num2words
 
 ISSUE: "Cannot open camera"
 FIX:
 - Check camera permissions: System Settings > Privacy & Security > Camera
-- Try different camera indices: 0, 1, 2
-- Check: system_profiler SPCameraDataType
+- Verify camera index with test script in Step 3
+- Your setup: Camera 2 = USB2.0_CAM1
+- If camera 2 doesn't work, try 0 or capture test image:
+  python -c "import cv2; cap = cv2.VideoCapture(2); ret, frame = cap.read(); cv2.imwrite('/tmp/test.jpg', frame); cap.release(); print('Saved to /tmp/test.jpg')"
 
 ISSUE: "Cannot open /dev/tty.usbmodem*"
 FIX:
