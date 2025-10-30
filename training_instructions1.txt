@@ -29,7 +29,7 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
   lerobot-train \
     --policy.path=lerobot/smolvla_base \
     --dataset.repo_id=kristaqp/so101-pick-place \
-    --policy.repo_id=kristaqp/smolvla-so101-demo \
+    --policy.repo_id=synphony/smolvla-so101-demo \
     --batch_size=64 \
     --steps=20000 \
     --output_dir=outputs/train/so101_demo \
@@ -72,7 +72,7 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
   lerobot-train \
     --policy.path=lerobot/smolvla_base \
     --dataset.repo_id=kristaqp/so101-pick-place \
-    --policy.repo_id=kristaqp/smolvla-so101-demo \
+    --policy.repo_id=synphony/smolvla-so101-demo \
     --batch_size=64 \
     --steps=20000 \
     --output_dir=outputs/train/so101_demo \
@@ -107,7 +107,7 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
 
   Upload to Hugging Face (for demo)
 
-  huggingface-cli upload kristaqp/smolvla-so101-demo \
+  huggingface-cli upload synphony/smolvla-so101-demo \
     outputs/train/so101_demo/checkpoints/last/pretrained_model
 
   Demo Inference Script
@@ -147,5 +147,5 @@ Simplified SO101 SmolVLA Training Guide - UPDATED
   Common errors:
   - "BackwardCompatibilityError": Dataset converting, wait for completion
   - "Feature mismatch": Missing --rename_map or --policy.empty_cameras=2
-  - "'policy.repo_id' missing": Add --policy.repo_id=kristaqp/smolvla-so101-demo
+  - "'policy.repo_id' missing": Add --policy.repo_id=synphony/smolvla-so101-demo
   - CUDA OOM: batch_size already at 64, check other GPU processes
