@@ -105,17 +105,56 @@ EOF
 STEP 4: Run Inference on Robot
 ========================================
 
-BASIC INFERENCE COMMAND (COPY AND PASTE THIS):
+INFERENCE OPTIONS:
+
+The model expects 5 camera inputs, but we only have 1 physical camera.
+Two approaches below:
+
+OPTION A: Custom Python Script (RECOMMENDED)
+
+# Run custom inference script (handles dummy cameras automatically)
+cd /Users/seanwu/Documents/Programming/so101/so101_training_documents
+python inference_so101.py
+
+# Script location: /Users/seanwu/Documents/Programming/so101/so101_training_documents/inference_so101.py
+
+# WHY THIS WORKS:
+# - Loads only ONE physical camera (index 0)
+# - Creates dummy black tensors for the 4 unused camera slots
+# - Policy receives all 5 expected inputs without OpenCV multi-open conflicts
+# - Bypasses lerobot-record's camera management limitations
+
+OPTION B: lerobot-record (may have camera conflicts)
 
 lerobot-record \
   --robot.type=so101_follower \
   --robot.port=/dev/tty.usbmodem5A7A0549711 \
   --robot.id=so101_follower \
-  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 1280, "height": 720, "fps": 30}}' \
-  --dataset.repo_id=synphony/eval_so101_demo \
+  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 1280, "height": 720, "fps": 30}, "camera2": {"type": "opencv", "index_or_path": 0, "width": 256, "height": 256, "fps": 30}, "camera3": {"type": "opencv", "index_or_path": 0, "width": 256, "height": 256, "fps": 30}, "empty_camera_0": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}, "empty_camera_1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
+  --dataset.repo_id=synphony/eval_so101_demo_$(date +%Y%m%d_%H%M%S) \
   --dataset.single_task="Pick the red object and place it in the box" \
   --policy.path=synphony/smolvla-so101-demo \
+  --policy.empty_cameras=2 \
+  --dataset.push_to_hub=false \
   --display_data=true
+
+# WHY OPTION B MAY FAIL:
+# - OpenCV cannot open the same camera device multiple times simultaneously
+# - lerobot-record tries to create real camera objects for all 5 cameras
+# - Error: "RuntimeError: OpenCVCamera(0) failed to set capture_width=256"
+# - This happens because camera 0 is already opened with width=1280
+#
+# If Option B fails, use Option A which handles this correctly
+
+# Note: All 5 cameras would use the same source (index 0) to create dummy feeds
+# camera1: 1280×720 (real input, matches training)
+# camera2, camera3: 256×256 (dummy, model expects 256×256)
+# empty_camera_0, empty_camera_1: 640×480 (dummy, model expects 640×480)
+# The policy only uses camera1 as the actual visual input
+
+REFERENCE:
+Official LeRobot evaluation docs: https://huggingface.co/docs/lerobot/en/il_robots?eval=Command
+Note: Official docs assume all cameras are real physical devices
 
 IMPORTANT NOTES:
 - Robot port: /dev/tty.usbmodem5A7A0549711 (YOUR specific SO-101)
@@ -220,10 +259,17 @@ FIX:
 - Consider using smaller batch sizes if memory is an issue
 
 ISSUE: "Feature mismatch" or "shape mismatch"
-FIX: Ensure camera configuration matches training:
-- Camera name: "camera1" (not "wrist.left", not "front")
-- Image dimensions match training if specified
-- State dimensions match robot (7-dim for SO-101)
+EXAMPLE: "Missing features: ['observation.images.camera2', 'observation.images.camera3', ...]"
+FIX: Model expects 5 camera inputs but only 1 physical camera available
+- Use custom inference script (Option A): python inference_so101.py
+- Script creates dummy tensors for missing cameras automatically
+- OR provide all 5 cameras in --robot.cameras with lerobot-record (may fail)
+
+ISSUE: "RuntimeError: OpenCVCamera(0) failed to set capture_width=256"
+FIX: Cannot open same camera multiple times with different settings
+- This error occurs when trying to use lerobot-record with dummy cameras
+- Solution: Use custom inference script (Option A) instead
+- The script loads camera once and creates dummy tensors for other slots
 
 ISSUE: Poor model performance or unexpected actions
 FIX: Check camera resolution and aspect ratio:
