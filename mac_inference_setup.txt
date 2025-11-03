@@ -61,7 +61,9 @@ HARDWARE SETUP:
 # Find robot port
 ls /dev/tty.* | grep -i usb
 
-# SO_101_old: /dev/tty.usbmodem5A7A0549711
+# SO_101_old_follower: /dev/tty.usbmodem5A7A0549711
+# SO_101_old_leader: /dev/tty.usbmodem5AB01838671
+# SO_101_new_follower: /dev/tty.usbmodem5A460826201
 
 # Find camera
 system_profiler SPCameraDataType
