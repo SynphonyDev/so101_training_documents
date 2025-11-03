@@ -65,6 +65,43 @@ ls /dev/tty.* | grep -i usb
 # SO_101_old_leader: /dev/tty.usbmodem5AB01838671
 # SO_101_new_follower: /dev/tty.usbmodem5A460826201
 
+#teleop without cameras
+lerobot-teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm
+
+# teleop with cameras
+lerobot-teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 5}}" \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true
+
+
+# Find Camera
+lerobot-find-cameras opencv
+
+--- Detected Cameras ---
+Camera #0:
+  Name: OpenCV Camera @ 0
+  Type: OpenCV
+  Id: 0
+  Backend api: AVFOUNDATION
+  Default stream profile:
+    Format: 16.0
+    Fourcc: 
+    Width: 1920
+    Height: 1080
+    Fps: 5.0
+
 # Find camera
 system_profiler SPCameraDataType
 
@@ -266,6 +303,16 @@ FIX: Model expects 5 camera inputs but only 1 physical camera available
 - Use custom inference script (Option A): python inference_so101.py
 - Script creates dummy tensors for missing cameras automatically
 - OR provide all 5 cameras in --robot.cameras with lerobot-record (may fail)
+
+ISSUE: "RuntimeError: OpenCVCamera(0) read failed (status=False)"
+FIX: macOS first frame read issue (FIXED as of Nov 3, 2025)
+- Root cause: First read() after camera configuration fails on macOS
+- Fix applied: Added videocapture.grab() to flush buffer in camera_opencv.py
+- Status: Issue is now resolved, camera teleoperation works correctly on MacOS
+- No action needed: Fix is in the library code
+- Fixed: First frame read failure after camera configuration
+- Location: lerobot/src/lerobot/cameras/opencv/camera_opencv.py:228-232
+- Solution: Added videocapture.grab() to flush stale frame buffer
 
 ISSUE: "RuntimeError: OpenCVCamera(0) failed to set capture_width=256"
 FIX: Cannot open same camera multiple times with different settings
