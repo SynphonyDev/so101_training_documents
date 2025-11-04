@@ -70,3 +70,10 @@ Your dataset needs to be tagged as LeRobot format on Hugging Face for compatibil
 If you have compute constraints, Synphony's neural world models could potentially help generate synthetic variations of your training data to augment your dataset!
 
 Would you like me to help with any specific aspect of this, such as setting up your dataset format, optimizing training parameters for your compute setup, or exploring how Synphony's technology could augment your training data?
+
+
+SmolVLA uses standardized camera names:
+
+OBS_IMAGE_1: Top-down view
+OBS_IMAGE_2: Wrist-mounted view
+OBS_IMAGE_3+: Additional viewpoints

@@ -65,7 +65,19 @@ ls /dev/tty.* | grep -i usb
 # SO_101_old_leader: /dev/tty.usbmodem5AB01838671
 # SO_101_new_follower: /dev/tty.usbmodem5A460826201
 
-#teleop without cameras
+# calibrate follower
+lerobot-calibrate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm
+
+# calibrate leader
+lerobot-calibrate \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm
+
+# teleop without cameras
 lerobot-teleoperate \
     --robot.type=so101_follower \
     --robot.port=/dev/tty.usbmodem5A7A0549711 \
@@ -74,7 +86,7 @@ lerobot-teleoperate \
     --teleop.port=/dev/tty.usbmodem5AB01838671 \
     --teleop.id=my_awesome_leader_arm
 
-# teleop with cameras
+# teleop with wrist camera
 lerobot-teleoperate \
     --robot.type=so101_follower \
     --robot.port=/dev/tty.usbmodem5A7A0549711 \
@@ -84,6 +96,67 @@ lerobot-teleoperate \
     --teleop.port=/dev/tty.usbmodem5AB01838671 \
     --teleop.id=my_awesome_leader_arm \
     --display_data=true
+
+# teleop with top camera
+lerobot-teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 50}}" \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true
+
+
+# Record & upload data
+
+lerobot-record \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 30}}" \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true \
+    --dataset.episode_time_s=20 \
+    --dataset.reset_time_s=1 \
+    --dataset.num_episodes=3 \
+    --dataset.single_task="Fold the t-shirt" \
+    --dataset.repo_id=${HF_USER}/record-test \
+    --dataset.root=/Users/seanwu/Documents/Programming/so101/datasets/record-test-4-10-43
+
+
+
+# upload data mannually
+huggingface-cli upload ${HF_USER}/record-test ~/.cache/huggingface/lerobot/record-test-3-06-16 --repo-type dataset
+
+# download datset
+huggingface-cli download --repo-type dataset --resume-download SynphonyDev/record-test-fourth-10 --local-dir /Users/seanwu/Documents/Programming/so101/record-test-fourth-10
+
+
+Keyboard Controls During Recording
+
+  From the code at /Users/seanwu/Documents/Programming/so101/lerobot/src/lerobot/utils/control_utils.py:118-168:
+
+  | Key             | Action            | Use Case                                                               |
+  |-----------------|-------------------|------------------------------------------------------------------------|
+  | → (Right Arrow) | Exit early        | Skip to next phase (finish episode early OR skip remaining reset time) |
+  | ← (Left Arrow)  | Re-record episode | Messed up? Exits early and discards current episode to re-record       |
+  | Esc (Escape)    | Stop recording    | Done with session, stop all recording 
+
+# bad episodes:
+first 10
+- episode 4
+- episode 10
+second 10
+- episode 6 iffy
+third 10
+- check 5 a bit sketchy
+fourth 10: completely fine
+fifth 10
+- 
 
 
 # Find Camera
@@ -311,8 +384,12 @@ FIX: macOS first frame read issue (FIXED as of Nov 3, 2025)
 - Status: Issue is now resolved, camera teleoperation works correctly on MacOS
 - No action needed: Fix is in the library code
 - Fixed: First frame read failure after camera configuration
-- Location: lerobot/src/lerobot/cameras/opencv/camera_opencv.py:228-232
-- Solution: Added videocapture.grab() to flush stale frame buffer
+- Location 1: lerobot/src/lerobot/cameras/opencv/camera_opencv.py:228-232
+  * Solution: Added videocapture.grab() after _configure_capture_settings()
+- Location 2: lerobot/src/lerobot/cameras/opencv/camera_opencv.py:174-177
+  * Solution: Added 3 additional grab() calls before warmup loop
+  * This fix handles cameras that need more buffer flushing (e.g., higher FPS cameras)
+- Total buffer flush: 4 frames (1 after config + 3 before warmup)
 
 ISSUE: "RuntimeError: OpenCVCamera(0) failed to set capture_width=256"
 FIX: Cannot open same camera multiple times with different settings
