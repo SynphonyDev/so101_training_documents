@@ -1,0 +1,502 @@
+SO-101 Mac Setup Guide
+================================
+Date: October 30, 2025
+Model: synphony/smolvla-so101-demo (your fine-tuned model)
+Hardware: M1 MacBook Air (8GB RAM)
+
+VERIFIED: SmolVLA is efficient enough to run on a MacBook!
+
+This guide covers three workflows:
+1. INITIAL SETUP: Installation and hardware connection
+2. TELEOPERATION AND DATA COLLECTION: Calibration, teleoperation, and recording
+3. MODEL INFERENCE: Loading and running the trained model
+
+========================================
+PART 1: INITIAL SETUP
+========================================
+
+========================================
+STEP 1: Install LeRobot on Mac
+========================================
+
+IMPORTANT: Use conda environment to avoid dependency conflicts!
+
+# Create dedicated conda environment
+conda create -n lerobot python=3.11 -y
+conda activate lerobot
+
+# Install from latest github
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+pip install -e ".[smolvla]"
+
+# Install additional dependencies for SmolVLA
+pip install num2words
+
+# CRITICAL: Install Feetech SDK for SO-101 robot motors
+pip install -e ".[feetech]"
+
+========================================
+STEP 2: Hardware Connection
+========================================
+
+HARDWARE SETUP:
+1. Connect SO-101 follower arm to Mac via USB
+2. Connect SO-101 leader arm to Mac via USB (if doing teleoperation)
+3. Connect camera(s) to Mac via USB
+4. Check device connections:
+
+# Find robot port
+ls /dev/tty.* | grep -i usb
+
+# Known ports for reference:
+# SO_101_old_follower: /dev/tty.usbmodem5A7A0549711
+# SO_101_old_leader: /dev/tty.usbmodem5AB01838671
+# SO_101_new_follower: /dev/tty.usbmodem5A460826201
+
+========================================
+STEP 3: Camera Setup and Testing
+========================================
+
+# Find Camera with LeRobot
+lerobot-find-cameras opencv
+
+--- Detected Cameras ---
+Camera #0:
+  Name: OpenCV Camera @ 0
+  Type: OpenCV
+  Id: 0
+  Backend api: AVFOUNDATION
+  Default stream profile:
+    Format: 16.0
+    Fourcc:
+    Width: 1920
+    Height: 1080
+    Fps: 5.0
+
+# Find camera with system profiler
+system_profiler SPCameraDataType
+
+# USB2.0_CAM1:
+#     Model ID: UVC Camera VendorID_1443 ProductID_37424
+#     Unique ID: 0x13000005a39230
+
+# Test camera indices to find which one is USB2.0_CAM1
+python << 'EOF'
+import cv2
+import os
+
+print("Testing camera indices and taking snapshots...")
+print("=" * 50)
+
+os.makedirs("./tmp", exist_ok=True)
+
+for i in range(5):
+    cap = cv2.VideoCapture(i)
+    ret, frame = cap.read()
+    if ret:
+        resolution = f"{frame.shape[1]}x{frame.shape[0]}"
+        filename = f"./tmp/camera_{i}_{resolution}.jpg"
+        cv2.imwrite(filename, frame)
+        print(f"✓ Camera {i}: Working - Resolution: {resolution}")
+        print(f"  Snapshot saved: {filename}")
+    else:
+        print(f"✗ Camera {i}: Not accessible")
+    cap.release()
+
+print("=" * 50)
+print("\nOpen the snapshot files to identify your USB2.0_CAM1:")
+print("  open ./tmp/camera_*.jpg")
+EOF
+
+# Based on tests: Camera 0 (1920x1080) = USB2.0_CAM1
+
+
+========================================
+PART 2: TELEOPERATION AND DATA COLLECTION
+========================================
+
+========================================
+STEP 4: Robot Calibration
+========================================
+
+# calibrate follower
+lerobot-calibrate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm
+
+# calibrate leader
+lerobot-calibrate \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm
+
+========================================
+STEP 5: Teleoperation
+========================================
+
+# teleop without cameras
+lerobot-teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm
+
+# teleop with wrist camera
+lerobot-teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 30}}" \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true
+
+# teleop with top camera
+lerobot-teleoperate \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 50}}" \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true
+
+========================================
+STEP 6: Data Recording and Upload
+========================================
+
+# Record & upload data
+lerobot-record \
+    --robot.type=so101_follower \
+    --robot.port=/dev/tty.usbmodem5A7A0549711 \
+    --robot.id=my_awesome_follower_arm \
+    --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 30}}" \
+    --teleop.type=so101_leader \
+    --teleop.port=/dev/tty.usbmodem5AB01838671 \
+    --teleop.id=my_awesome_leader_arm \
+    --display_data=true \
+    --dataset.episode_time_s=20 \
+    --dataset.reset_time_s=1 \
+    --dataset.num_episodes=3 \
+    --dataset.single_task="Fold the t-shirt" \
+    --dataset.repo_id=${HF_USER}/record-test \
+    --dataset.root=/Users/seanwu/Documents/Programming/so101/datasets/record-test-4-10-43
+
+# upload data mannually
+huggingface-cli upload ${HF_USER}/record-test ~/.cache/huggingface/lerobot/record-test-3-06-16 --repo-type dataset
+
+# download datset
+huggingface-cli download --repo-type dataset --resume-download SynphonyDev/record-test-fourth-10 --local-dir /Users/seanwu/Documents/Programming/so101/record-test-fourth-10
+
+
+Keyboard Controls During Recording
+
+  From the code at /Users/seanwu/Documents/Programming/so101/lerobot/src/lerobot/utils/control_utils.py:118-168:
+
+  | Key             | Action            | Use Case                                                               |
+  |-----------------|-------------------|------------------------------------------------------------------------|
+  | → (Right Arrow) | Exit early        | Skip to next phase (finish episode early OR skip remaining reset time) |
+  | ← (Left Arrow)  | Re-record episode | Messed up? Exits early and discards current episode to re-record       |
+  | Esc (Escape)    | Stop recording    | Done with session, stop all recording
+
+# bad episodes:
+first 10
+- episode 4
+- episode 10
+second 10
+- episode 6 iffy
+third 10
+- check 5 a bit sketchy
+fourth 10: completely fine
+fifth 10
+-
+
+
+========================================
+PART 3: MODEL INFERENCE
+========================================
+
+========================================
+STEP 7: Download and Test Model Loading (No Robot)
+========================================
+
+# Download model files from HuggingFace to local directory
+huggingface-cli download synphony/smolvla-so101-demo \
+  --include "pretrained_model/*" \
+  --local-dir ./smolvla-model
+
+# Test that your fine-tuned model loads successfully on Mac
+python << 'EOF'
+from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+
+print("Loading model from local path...")
+policy = SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
+print("✓ Model loaded successfully from local path!")
+print(f"Model parameters: {sum(p.numel() for p in policy.parameters()) / 1e6:.1f}M")
+print(f"Device: {next(policy.parameters()).device}")
+EOF
+
+# Note: Model will automatically use Apple's MPS (Metal) GPU on M1 Mac!
+
+========================================
+STEP 8: Run Inference on Robot
+========================================
+
+INFERENCE OPTIONS:
+
+The model expects 5 camera inputs, but we only have 1 physical camera.
+Two approaches below:
+
+OPTION A: Custom Python Script (RECOMMENDED)
+
+# Run custom inference script (handles dummy cameras automatically)
+cd /Users/seanwu/Documents/Programming/so101/so101_training_documents
+python inference_so101.py
+
+# Script location: /Users/seanwu/Documents/Programming/so101/so101_training_documents/inference_so101.py
+
+# WHY THIS WORKS:
+# - Loads only ONE physical camera (index 0)
+# - Creates dummy black tensors for the 4 unused camera slots
+# - Policy receives all 5 expected inputs without OpenCV multi-open conflicts
+# - Bypasses lerobot-record's camera management limitations
+
+OPTION B: lerobot-record (may have camera conflicts)
+
+lerobot-record \
+  --robot.type=so101_follower \
+  --robot.port=/dev/tty.usbmodem5A7A0549711 \
+  --robot.id=so101_follower \
+  --robot.cameras='{"camera1": {"type": "opencv", "index_or_path": 0, "width": 1280, "height": 720, "fps": 30}, "camera2": {"type": "opencv", "index_or_path": 0, "width": 256, "height": 256, "fps": 30}, "camera3": {"type": "opencv", "index_or_path": 0, "width": 256, "height": 256, "fps": 30}, "empty_camera_0": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}, "empty_camera_1": {"type": "opencv", "index_or_path": 0, "width": 640, "height": 480, "fps": 30}}' \
+  --dataset.repo_id=synphony/eval_so101_demo_$(date +%Y%m%d_%H%M%S) \
+  --dataset.single_task="Pick the red object and place it in the box" \
+  --policy.path=synphony/smolvla-so101-demo \
+  --policy.empty_cameras=2 \
+  --dataset.push_to_hub=false \
+  --display_data=true
+
+# WHY OPTION B MAY FAIL:
+# - OpenCV cannot open the same camera device multiple times simultaneously
+# - lerobot-record tries to create real camera objects for all 5 cameras
+# - Error: "RuntimeError: OpenCVCamera(0) failed to set capture_width=256"
+# - This happens because camera 0 is already opened with width=1280
+#
+# If Option B fails, use Option A which handles this correctly
+
+# Note: All 5 cameras would use the same source (index 0) to create dummy feeds
+# camera1: 1280×720 (real input, matches training)
+# camera2, camera3: 256×256 (dummy, model expects 256×256)
+# empty_camera_0, empty_camera_1: 640×480 (dummy, model expects 640×480)
+# The policy only uses camera1 as the actual visual input
+
+REFERENCE:
+Official LeRobot evaluation docs: https://huggingface.co/docs/lerobot/en/il_robots?eval=Command
+Note: Official docs assume all cameras are real physical devices
+
+IMPORTANT NOTES:
+- Robot port: /dev/tty.usbmodem5A7A0549711 (YOUR specific SO-101)
+- Camera: index 0 = USB2.0_CAM1 (verified in Step 3)
+- Camera resolution: 1280×720 (MUST match training data aspect ratio)
+  * Training data used: 1280×720 (16:9 aspect ratio)
+  * Camera captures at: 1920×1080 native, but OpenCV config downsamples to 1280×720
+  * LeRobot automatically resizes to 512×512, then model processes to 256×256
+  * Using 1280×720 preserves the 16:9 aspect ratio from training
+- Camera name: "camera1" (MUST match training - mapped from wrist.left)
+- Task description: MUST match training task exactly
+- Model path: synphony/smolvla-so101-demo (HuggingFace repo - will cache locally)
+  * Model files now at repo root (moved from pretrained_model/ subdirectory)
+
+========================================
+STEP 9: Configuration Matching Training
+========================================
+
+YOUR TRAINING CONFIGURATION:
+- Single camera: wrist.left → camera1
+- Camera resolution: 1280×720 (16:9 aspect ratio)
+- Empty cameras: 2 (using 1 out of 3 cameras)
+- Task: "Pick the red object and place it in the box"
+
+INFERENCE MUST MATCH:
+- Use same camera name: "camera1"
+- Use same task description
+- Use same aspect ratio: 1280×720 (16:9) - critical for model performance!
+  * Model expects: 256×256 (after automatic resizing from 512×512)
+  * LeRobot automatically handles resizing with padding
+  * BUT aspect ratio should match training to preserve visual features
+
+Example Python inference script:
+
+# inference_demo.py
+from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+import torch
+import cv2
+
+# Load your trained model from local path (must download first)
+# Device is automatically selected (will use MPS GPU on M1 Mac)
+policy = SmolVLAPolicy.from_pretrained("./smolvla-model/pretrained_model")
+
+# Your task (MUST match training)
+task = "Pick the red object and place it in the box"
+
+# Capture camera frame (use camera 0 = USB2.0_CAM1)
+cap = cv2.VideoCapture(0)
+ret, frame = cap.read()
+
+# Prepare observation
+observation = {
+    "observation.images.camera1": torch.from_numpy(frame).permute(2, 0, 1).float(),
+    "observation.state": torch.randn(7),  # Replace with actual robot state
+}
+
+# Get action prediction
+with torch.no_grad():
+    action = policy.select_action(observation, task=task)
+
+print(f"Predicted action: {action}")
+cap.release()
+
+
+========================================
+REFERENCE SECTIONS
+========================================
+
+========================================
+TROUBLESHOOTING
+========================================
+
+ISSUE: "No module named 'lerobot'"
+FIX: Install in conda environment (see Step 1)
+
+ISSUE: "Package `num2words` is required"
+FIX: pip install num2words
+
+ISSUE: "ModuleNotFoundError: No module named 'scservo_sdk'"
+FIX: SO-101 uses Feetech motors which require Feetech SDK
+- Run: cd lerobot && pip install -e ".[feetech]"
+- This installs feetech-servo-sdk package
+- Must be done from lerobot directory (editable install)
+
+ISSUE: "Cannot open camera"
+FIX:
+- Check camera permissions: System Settings > Privacy & Security > Camera
+- Verify camera index with test script in Step 3
+- Your setup: Camera 0 = USB2.0_CAM1
+- If camera 0 doesn't work, try other indices or capture test image:
+  python -c "import cv2; cap = cv2.VideoCapture(0); ret, frame = cap.read(); cv2.imwrite('./tmp/test.jpg', frame); cap.release(); print('Saved to ./tmp/test.jpg')"
+
+ISSUE: "Cannot open /dev/tty.usbmodem*"
+FIX:
+- Check USB connection
+- Install serial drivers if needed
+- Check permissions: ls -l /dev/tty.usbmodem*
+
+ISSUE: Model loading is slow
+FIX: Expected on first load - model downloads from HuggingFace
+      Subsequent loads will be faster (cached locally)
+
+ISSUE: Inference is slow on Mac
+FIX:
+- SmolVLA is optimized for efficiency but may be slower on CPU
+- Expected: ~1-5 seconds per action on M1 Mac
+- Consider using smaller batch sizes if memory is an issue
+
+ISSUE: "Feature mismatch" or "shape mismatch"
+EXAMPLE: "Missing features: ['observation.images.camera2', 'observation.images.camera3', ...]"
+FIX: Model expects 5 camera inputs but only 1 physical camera available
+- Use custom inference script (Option A): python inference_so101.py
+- Script creates dummy tensors for missing cameras automatically
+- OR provide all 5 cameras in --robot.cameras with lerobot-record (may fail)
+
+ISSUE: "RuntimeError: OpenCVCamera(0) read failed (status=False)"
+FIX: macOS first frame read issue (FIXED as of Nov 3, 2025)
+- Root cause: First read() after camera configuration fails on macOS
+- Fix applied: Added videocapture.grab() to flush buffer in camera_opencv.py
+- Status: Issue is now resolved, camera teleoperation works correctly on MacOS
+- No action needed: Fix is in the library code
+- Fixed: First frame read failure after camera configuration
+- Location 1: lerobot/src/lerobot/cameras/opencv/camera_opencv.py:228-232
+  * Solution: Added videocapture.grab() after _configure_capture_settings()
+- Location 2: lerobot/src/lerobot/cameras/opencv/camera_opencv.py:174-177
+  * Solution: Added 3 additional grab() calls before warmup loop
+  * This fix handles cameras that need more buffer flushing (e.g., higher FPS cameras)
+- Total buffer flush: 4 frames (1 after config + 3 before warmup)
+
+ISSUE: "RuntimeError: OpenCVCamera(0) failed to set capture_width=256"
+FIX: Cannot open same camera multiple times with different settings
+- This error occurs when trying to use lerobot-record with dummy cameras
+- Solution: Use custom inference script (Option A) instead
+- The script loads camera once and creates dummy tensors for other slots
+
+ISSUE: Poor model performance or unexpected actions
+FIX: Check camera resolution and aspect ratio:
+- Training used: 1280×720 (16:9 aspect ratio)
+- Your inference should use: 1280×720 (same aspect ratio)
+- Different aspect ratios (e.g., 640×480 = 4:3) cause different padding
+- This changes visual features and degrades performance
+- LeRobot resizes automatically, but aspect ratio should match training
+
+ISSUE: "config.json not found" or 404 error or "Repo id must be in the form..."
+FIX: Model files must be at repo root, not in subdirectory
+- FIXED: Model files moved from pretrained_model/ to repo root
+- Now use: --policy.path=synphony/smolvla-so101-demo
+- LeRobot downloads and caches automatically from HuggingFace
+- If you uploaded to a subdirectory, move files to root:
+  cd /path/to/local/model && hf upload your-repo/model-name . .
+
+========================================
+NEXT STEPS
+========================================
+
+FOR TELEOPERATION AND DATA COLLECTION:
+1. Install lerobot: See Step 1 (use conda environment)
+2. Connect robot and identify ports (Step 2)
+3. Test camera setup (Step 3)
+4. Calibrate robot arms (Step 4)
+5. Test teleoperation (Step 5)
+6. Record training data (Step 6)
+
+FOR MODEL INFERENCE:
+1. Install lerobot: See Step 1 (use conda environment)
+2. Download model from HuggingFace: See Step 7
+3. Test model loading without robot (Step 7)
+4. Connect robot and identify ports (Step 2)
+5. Run basic inference (Step 8)
+6. Adjust camera/robot configuration as needed
+7. Record evaluation episodes
+
+EVALUATION DATASET:
+When you run inference, it will create an evaluation dataset:
+- Dataset name: synphony/eval_so101_demo
+- Contains robot trajectories from your policy
+- Can be uploaded to HuggingFace for analysis
+
+========================================
+PERFORMANCE EXPECTATIONS
+========================================
+
+Model Size: 450M parameters (907MB model file)
+Device: Automatically uses MPS (Metal GPU) on M1 Mac - better than CPU!
+Mac Inference Speed: ~0.5-2 seconds per action (MPS GPU-accelerated)
+Memory Usage: ~2-3GB RAM during inference
+First Load Time: ~20-30 seconds (from local path)
+Model Download Time: ~1-2 minutes (one-time download, 907MB file)
+
+Your M1 Mac handles this comfortably with GPU acceleration!
+
+========================================
+ADDITIONAL RESOURCES
+========================================
+
+- LeRobot Docs: https://huggingface.co/docs/lerobot
+- SO-101 Guide: https://huggingface.co/SO-101
+- SmolVLA Model: https://huggingface.co/synphony/smolvla-so101-demo
+- Training Results: See training_results_oct24_2025.txt
+
+If you encounter issues not covered here, check the LeRobot GitHub issues:
+https://github.com/huggingface/lerobot/issues
