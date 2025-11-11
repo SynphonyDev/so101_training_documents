@@ -122,10 +122,10 @@ lerobot-record \
     --display_data=true \
     --dataset.episode_time_s=20 \
     --dataset.reset_time_s=1 \
-    --dataset.num_episodes=3 \
+    --dataset.num_episodes=1 \
     --dataset.single_task="Fold the t-shirt" \
     --dataset.repo_id=${HF_USER}/record-test \
-    --dataset.root=/Users/seanwu/Documents/Programming/so101/datasets/record-test-4-10-43
+    --dataset.root=/Users/seanwu/Documents/Programming/so101/datasets/record-test-yc
 
 
 
@@ -257,6 +257,23 @@ lerobot-record \
 # - This happens because camera 0 is already opened with width=1280
 #
 # If Option B fails, use Option A which handles this correctly
+
+OPTION C: HuggingFace Recommended Command (adapted for Mac)
+
+lerobot-record  \
+  --robot.type=so101_follower \
+  --robot.port=/dev/tty.usbmodem5A7A0549711 \
+  --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 30}}" \
+  --robot.id=my_awesome_follower_arm \
+  --display_data=false \
+  --dataset.repo_id=SynphonyDev/eval_so101 \
+  --dataset.single_task="Fold the t-shirt" \
+  --policy.path=SynphonyDev/2025-11-4-act
+
+  # <- Teleop optional if you want to teleoperate in between episodes \
+  # --teleop.type=so101_leader \
+  # --teleop.port=/dev/tty.usbmodem5AB01838671 \
+  # --teleop.id=my_awesome_leader_arm \
 
 # Note: All 5 cameras would use the same source (index 0) to create dummy feeds
 # camera1: 1280×720 (real input, matches training)
