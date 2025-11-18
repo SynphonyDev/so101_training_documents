@@ -266,9 +266,9 @@ lerobot-record  \
   --robot.cameras="{ front: {type: opencv, index_or_path: 0, width: 1920, height: 1080, fps: 30}}" \
   --robot.id=my_awesome_follower_arm \
   --display_data=false \
-  --dataset.repo_id=SynphonyDev/eval_so101 \
+  --dataset.repo_id=SynphonyDev/eval_so101_11-16 \
   --dataset.single_task="Fold the t-shirt" \
-  --policy.path=SynphonyDev/2025-11-4-act
+  --policy.path=SynphonyDev/2025-11-15-act_blk
 
   # <- Teleop optional if you want to teleoperate in between episodes \
   # --teleop.type=so101_leader \
